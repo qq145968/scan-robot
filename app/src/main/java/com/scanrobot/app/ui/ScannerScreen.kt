@@ -1,4 +1,4 @@
-package com.scanrobot.app.ui
+﻿package com.scanrobot.app.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -289,6 +289,21 @@ private fun ResultHeader(viewModel: ScanViewModel) {
             }
         }
         Row {
+            Text(
+                "清空",
+                fontSize = 14.sp,
+                color = RedPrimary,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.clickable {
+                    val count = viewModel.clearAll()
+                    if (count > 0) {
+                        viewModel.showToast("已清空 $count 条记录")
+                    } else {
+                        viewModel.showToast("暂无记录可清空")
+                    }
+                }
+            )
+            Spacer(modifier = Modifier.width(14.dp))
             Text(
                 "复制",
                 fontSize = 14.sp,

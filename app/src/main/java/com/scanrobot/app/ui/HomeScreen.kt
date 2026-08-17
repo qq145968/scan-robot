@@ -1,4 +1,4 @@
-package com.scanrobot.app.ui
+﻿package com.scanrobot.app.ui
 
 import android.app.DownloadManager
 import android.content.BroadcastReceiver
@@ -7,18 +7,17 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.database.Cursor
 import android.net.Uri
+import android.util.Base64
 import android.os.Environment
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,6 +27,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.material.icons.Icons
@@ -58,10 +58,12 @@ import com.scanrobot.app.data.AppMessage
 import com.scanrobot.app.data.ScanBatch
 import com.scanrobot.app.data.ScanModeOption
 import com.scanrobot.app.data.ScanSettings
+import com.scanrobot.app.data.UserProfile
 import com.scanrobot.app.data.VersionInfo
 import com.scanrobot.app.data.scanModeOptions
 import com.scanrobot.app.network.ApiClient
 import com.scanrobot.app.ui.theme.*
+import coil.compose.AsyncImage
 import com.scanrobot.app.viewmodel.ScanViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -103,7 +105,7 @@ fun HomeScreen(viewModel: ScanViewModel, onLogout: () -> Unit = {}) {
             .fillMaxSize()
             .background(BgLight)
     ) {
-        AppHeader()
+        AppHeader(appInfo)
 
         Box(modifier = Modifier.weight(1f)) {
             when (activeTab) {
@@ -198,17 +200,7 @@ fun HomeScreen(viewModel: ScanViewModel, onLogout: () -> Unit = {}) {
 
 @Composable
 private fun AnnouncementBar(text: String) {
-    val transition = rememberInfiniteTransition(label = "announcement")
-    val offset by transition.animateFloat(
-        initialValue = 1f,
-        targetValue = -1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 15000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "scroll"
-    )
-
+    val scrollState = rememberScrollState(initial = 0)
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = Color(0xFFFFF8E1),
@@ -217,28 +209,25 @@ private fun AnnouncementBar(text: String) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 "\uD83D\uDCE2",
                 fontSize = 14.sp,
-                modifier = Modifier.padding(end = 6.dp)
+                modifier = Modifier.padding(end = 8.dp)
             )
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(20.dp)
-                    .clip(RoundedCornerShape(4.dp))
+                    .horizontalScroll(scrollState)
             ) {
                 Text(
                     text = text,
                     fontSize = 13.sp,
                     color = Color(0xFFE65100),
-                    maxLines = 1,
-                    modifier = Modifier
-                        .offset { IntOffset(x = (offset * 400).toInt(), y = 0) }
-                        .padding(vertical = 1.dp)
+                    modifier = Modifier.padding(end = 16.dp),
+                    softWrap = false
                 )
             }
         }
@@ -246,7 +235,7 @@ private fun AnnouncementBar(text: String) {
 }
 
 @Composable
-private fun AppHeader() {
+private fun AppHeader(appInfo: AppInfo? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -261,12 +250,22 @@ private fun AppHeader() {
                 .background(BluePrimary),
             contentAlignment = Alignment.Center
         ) {
-            Text("SC", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            val iconUrl = appInfo?.homeIconUrl
+            if (!iconUrl.isNullOrEmpty()) {
+                AsyncImage(
+                    model = iconUrl,
+                    contentDescription = "应用图标",
+                    modifier = Modifier.fillMaxSize().clip(CircleShape),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Text("SC", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
         }
         Spacer(modifier = Modifier.width(12.dp))
         Column {
-            Text("扫码机器人", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-            Text("让手机变成扫码枪", fontSize = 12.sp, color = TextSecondary)
+            Text(appInfo?.homeAppName ?: "扫码机器人", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text(appInfo?.homeAppDescription ?: "让手机变成扫码枪", fontSize = 12.sp, color = TextSecondary)
         }
     }
 }
@@ -472,7 +471,7 @@ private fun ManageTab(viewModel: ScanViewModel) {
                     color = DangerRed,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.clickable {
-                        viewModel.clearAll()
+                        viewModel.clearAllHistory()
                         viewModel.showToast("所有数据已清除")
                     }
                 )
@@ -517,6 +516,49 @@ private fun ProfileTab(
     val username = sharedPrefs.getString("auth_username", "扫码机器人") ?: "扫码机器人"
 
     val totalCount = batches.sumOf { it.count }
+
+    var userProfile by remember { mutableStateOf<UserProfile?>(null) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        uri?.let {
+            scope.launch {
+                try {
+                    val inputStream = context.contentResolver.openInputStream(uri)
+                    val bytes = inputStream?.readBytes()
+                    inputStream?.close()
+                    if (bytes != null) {
+                        val compressedBytes = compressAvatar(bytes)
+                        val base64 = Base64.encodeToString(compressedBytes, Base64.NO_WRAP)
+                        val success = ApiClient.uploadAvatar(context, "data:image/jpeg;base64,$base64")
+                        if (success) {
+                            val profile = withContext(Dispatchers.IO) { ApiClient.getUserInfo(context) }
+                            if (profile != null) {
+                                userProfile = profile
+                                sharedPrefs.edit().putString("auth_avatar_url", profile.avatarUrl).commit()
+                            }
+                            viewModel.showToast("头像更新成功")
+                        } else {
+                            viewModel.showToast("头像上传失败")
+                        }
+                    }
+                } catch (e: Exception) {
+                    viewModel.showToast("上传失败: ${e.message}")
+                }
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        scope.launch {
+            val profile = withContext(Dispatchers.IO) { ApiClient.getUserInfo(context) }
+            if (profile != null) {
+                userProfile = profile
+                sharedPrefs.edit().putString("auth_avatar_url", profile.avatarUrl).commit()
+            }
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Box(
@@ -581,19 +623,30 @@ private fun ProfileTab(
                     modifier = Modifier
                         .size(64.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.2f)),
+                        .background(Color.White.copy(alpha = 0.2f))
+                        .clickable {
+                            launcher.launch("image/*")
+                        },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        Icons.Filled.Person,
-                        contentDescription = "头像",
-                        tint = Color.White,
-                        modifier = Modifier.size(32.dp)
-                    )
+                    if (!userProfile?.avatarUrl.isNullOrEmpty()) {
+                        AsyncImage(
+                            model = userProfile?.avatarUrl,
+                            contentDescription = "头像",
+                            modifier = Modifier.fillMaxSize().clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    } else {
+                        Icon(
+                            Icons.Filled.Person,
+                            contentDescription = "头像",
+                            tint = Color.White,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(username, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
-                Text("v${BuildConfig.VERSION_NAME}", fontSize = 12.sp, color = Color.White.copy(alpha = 0.7f))
             }
         }
 
@@ -627,6 +680,7 @@ private fun ProfileTab(
                 ProfileRow("提示方式", alertText(settings.alertType))
                 ProfileRow("允许重复录入", if (settings.allowDuplicate) "已开启" else "已关闭")
                 ProfileRow("自动保存照片", if (settings.autoSavePhoto) "已开启" else "已关闭")
+                ProfileRow("关于应用", "v${BuildConfig.VERSION_NAME}")
             }
         }
 
@@ -641,10 +695,8 @@ private fun ProfileTab(
             border = androidx.compose.foundation.BorderStroke(0.5.dp, BorderLight)
         ) {
             Column {
-                ProfileRow("关于应用", "v${BuildConfig.VERSION_NAME}")
-                Divider(modifier = Modifier.padding(horizontal = 16.dp), thickness = 0.5.dp, color = Color(0xFFF0F0F0))
                 ProfileRowClickable("清除所有数据", "点击清除", DangerRed) {
-                    viewModel.clearAll()
+                    viewModel.clearAllHistory()
                     viewModel.showToast("所有数据已清除")
                 }
             }
@@ -1260,5 +1312,25 @@ private fun SimplePickerSheet(
                 Spacer(modifier = Modifier.height(16.dp))
             }
         }
+    }
+}
+
+private fun compressAvatar(bytes: ByteArray): ByteArray {
+    return try {
+        val bitmap = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        val maxSize = 256
+        val width = bitmap.width
+        val height = bitmap.height
+        val scale = minOf(maxSize.toFloat() / width, maxSize.toFloat() / height, 1f)
+        val newWidth = (width * scale).toInt()
+        val newHeight = (height * scale).toInt()
+        val scaled = android.graphics.Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
+        val outputStream = java.io.ByteArrayOutputStream()
+        scaled.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, outputStream)
+        bitmap.recycle()
+        scaled.recycle()
+        outputStream.toByteArray()
+    } catch (e: Exception) {
+        bytes
     }
 }

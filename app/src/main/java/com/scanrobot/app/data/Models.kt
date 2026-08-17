@@ -1,4 +1,4 @@
-package com.scanrobot.app.data
+﻿package com.scanrobot.app.data
 
 import java.util.UUID
 
@@ -41,6 +41,11 @@ data class AppInfo(
     val splashScreenUrl: String = "",
     val appName: String = "扫码机器人",
     val appDescription: String = "让手机变成扫码枪",
+    val splashAppName: String = "二维码管理系统",
+    val splashAppDescription: String = "专业的二维码管理工具",
+    val splashBgColor: String = "#1677ff",
+    val homeAppName: String = "扫码机器人",
+    val homeAppDescription: String = "让手机变成扫码枪",
     val latestVersion: VersionInfo? = null,
     val messages: List<AppMessage> = emptyList(),
     val unreadCount: Int = 0
@@ -67,6 +72,20 @@ data class AppMessage(
 data class CaptchaResult(
     val captchaId: String = "",
     val captchaImage: String = ""
+)
+
+data class UserProfile(
+    val id: Int = 0,
+    val username: String = "",
+    val email: String = "",
+    val phone: String = "",
+    val avatar: String = "",
+    val avatarUrl: String = "",
+    val status: Int = 1,
+    val source: String = "",
+    val loginCount: Int = 0,
+    val lastLogin: String = "",
+    val createdAt: String = ""
 )
 
 val scanModeOptions = listOf(
