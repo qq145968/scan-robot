@@ -26,34 +26,18 @@ jobs:
       with:
         gradle-version: '8.7'
 
-    - name: Fix line endings
-      run: |
-        find . -type f \( -name "*.kt" -o -name "*.kts" -o -name "*.java" -o -name "*.xml" -o -name "*.properties" -o -name "*.php" -o -name "*.txt" -o -name "*.pro" -o -name "*.yml" -o -name "*.json" -o -name "*.md" \) -exec sed -i 's/\r$//' {} +
-        chmod +x gradlew
-        echo "Line endings fixed"
-
-    - name: Verify gradlew
-      run: |
-        file gradlew
-        head -1 gradlew
-        ls -la gradle/wrapper/
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
 
     - name: Build Debug APK
+      env:
+        JAVA_OPTS: "-Xmx4096m -XX:MaxMetaspaceSize=512m"
+        GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=512m"
       run: ./gradlew assembleDebug --no-daemon --stacktrace
 
     - name: Upload APK
-      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: scan-robot-debug-apk
         path: app/build/outputs/apk/debug/*.apk
         retention-days: 30
-
-    - name: Upload build logs on failure
-      if: failure()
-      uses: actions/upload-artifact@v4
-      with:
-        name: build-logs
-        path: |
-          app/build/reports/
-          app/build/outputs/logs/
