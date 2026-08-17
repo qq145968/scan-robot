@@ -1,4 +1,4 @@
-﻿package com.scanrobot.app.data
+package com.scanrobot.app.data
 
 import java.util.UUID
 
@@ -44,8 +44,10 @@ data class AppInfo(
     val splashAppName: String = "二维码管理系统",
     val splashAppDescription: String = "专业的二维码管理工具",
     val splashBgColor: String = "#1677ff",
+    val splashIconUrl: String = "",
     val homeAppName: String = "扫码机器人",
     val homeAppDescription: String = "让手机变成扫码枪",
+    val homeIconUrl: String = "",
     val latestVersion: VersionInfo? = null,
     val messages: List<AppMessage> = emptyList(),
     val unreadCount: Int = 0
